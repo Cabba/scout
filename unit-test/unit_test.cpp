@@ -1,4 +1,6 @@
 #include <iostream>
+#include <fstream>
+
 #include "../scout/scout.hpp"
 namespace{
 
@@ -20,13 +22,13 @@ namespace{
 
 } // namespace
 
-
-void scout_unit_test(){
-	scout::execute_tests(std::cout);
-}
-
-
 int main(){
-	scout_unit_test();
+	// Save the result in a scout.log file
+	std::ofstream out("scout.log");
+	if( out.is_open() ) scout::evaluate_all_tests(out);
+	out.close();
+
+	// Run again the tests and print the result on the standard output
+	scout::evaluate_all_tests(std::cout);
 	return 0;
 }

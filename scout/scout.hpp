@@ -5,20 +5,6 @@
 /// @date 20/08/2013
 ///
 /// Simple C with Object Unit Test - SCOUT
-/// Copyright (C) 2013  Federico Cabassi
-///
-/// This program is free software: you can redistribute it and/or modify
-/// it under the terms of the GNU General Public License as published by
-/// the Free Software Foundation, either version 3 of the License, or
-/// (at your option) any later version.
-///
-/// This program is distributed in the hope that it will be useful,
-/// but WITHOUT ANY WARRANTY; without even the implied warranty of
-/// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-/// GNU General Public License for more details.
-///
-/// You should have received a copy of the GNU General Public License
-/// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
@@ -30,7 +16,6 @@
 	class SCOUT_##TESTNAME : public scout_internal::Test{\
 	public:\
 		SCOUT_##TESTNAME(){\
-			std::cout << "[ CREATION ] Test SCOUT_" << #TESTNAME << "." << std::endl;\
 			name = #TESTNAME;\
 			scout_internal::TestExecutor::singleton().add_test(this);\
 		}\
@@ -56,7 +41,8 @@ namespace scout_internal{
 
 	class Test
 	{
-	public:
+	protected:
+		friend class TestExecutor;
 		int failed_expr, total_expr;
 		std::string name;
 
@@ -75,7 +61,7 @@ namespace scout_internal{
 
 		TestExecutor() : m_tests(), m_failed_tests(0) {}
 
-		void shutdown();
+		void reset();
 
 	public:
 		static TestExecutor& singleton();
@@ -116,11 +102,16 @@ namespace scout_internal{
 
 		message_stream << "\n[==========] REPORT: FAILED " << m_failed_tests << " TEST OUT OF " << m_tests.size() << "." << std::endl;
 
-		shutdown();
+		reset();
 	}
 
-	void TestExecutor::shutdown(){
-		m_tests.clear();
+	/// Reset the data to initial condition
+	void TestExecutor::reset(){
+		auto end = m_tests.end();
+		for(auto it = m_tests.begin(); it != end; ++it){
+			(*it)->failed_expr = 0;
+			(*it)->total_expr = 0;
+		}
 	}
 
 } // namespace scout_internal
@@ -129,8 +120,8 @@ namespace scout_internal{
 namespace scout{
 
 	/// Run all the test defined in order and print the result on the message_stream std::ostream.
-	void execute_tests(std::ostream& message_stream){
-		message_stream << "\n[==========] Simple C with Object Unit Test - SCOUT " << std::endl;
+	void evaluate_all_tests(std::ostream& message_stream){
+		message_stream << "[==========] Simple C with Object Unit Test - SCOUT " << std::endl;
 		scout_internal::TestExecutor::singleton().run_tests(message_stream);
 	}
 
