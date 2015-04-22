@@ -5,7 +5,7 @@
 /// @date 20/08/2013
 ///
 /// Simple C with Object Unit Test - SCOUT
-/// v 0.1
+/// v 0.1.1 - Adding timing features.
 
 #pragma once
 
@@ -15,13 +15,38 @@
 #include <string>
 #include <utility>
 #include <cstdint>
+#include <chrono>
 
-#define SCOUT_DISALLOW_COPY_AND_ASSIGN(TYPE)\
-	TYPE(const TYPE&);\
-	SCOUT_DISALLOW_ASSIGN(TYPE)
 
-#define SCOUT_DISALLOW_ASSIGN(TYPE)\
-	void operator=(const TYPE&)
+/// ////////////
+/// SCOUT MACROS
+/// ////////////
+
+/// Assert an expression that should be true
+#define SCOUT_AssertTrue(expr)\
+	evaluate_expr(message_stream, new ExprInfo(ASSERT_TRUE, #expr, expr, __LINE__) );
+
+/// Assert an expression that should be false
+#define SCOUT_AssertFalse(expr)\
+	evaluate_expr(message_stream, new ExprInfo(ASSERT_FALSE, #expr, expr, __LINE__) );
+
+// TODO In progress 
+/// Evaluate the execution time of an expression
+#define SCOUT_GetTime(expr)\
+	auto start = std::chrono::system_clock::now();\
+	expr;\
+	auto end = std::chrono::system_clock::now();\
+	std::chrono::duration<double> time = end-start;\
+	evaluate_expr(message_stream, new ExprInfo(EVAL_TIME, #expr, time.count(), __LINE__) );
+	
+// TODO
+/// Check if the execution of a given expression is under a maximum time 
+// #define SCOUT_CheckTime(expr, max_milli_time) 
+
+
+/// //////////
+/// SCOUT CODE
+/// //////////
 
 ///Define a new test with TESTNAME name.
 #define SCOUT_DEFINE_TEST(FAMILYNAME, TESTNAME)\
@@ -38,14 +63,6 @@
 	SCOUT_##FAMILYNAME##_##TESTNAME##_class SCOUT_##FAMILYNAME##_##TESTNAME##_instance; } }\
 	void scout::internal::SCOUT_##FAMILYNAME##_##TESTNAME##_class::run(std::ostream& message_stream)
 
-/// Assert an expression that should be true
-#define SCOUT_AssertTrue(expr)\
-	evaluate_expr(message_stream, new ExprInfo(ASSERT_TRUE, #expr, expr, __LINE__) )
-
-/// Assert an expression that should be false
-#define SCOUT_AssertFalse(expr)\
-	evaluate_expr(message_stream, new ExprInfo(ASSERT_FALSE, #expr, expr, __LINE__) )
-
 /// Internal implementation of scout
 namespace scout{
 	namespace internal{
@@ -53,33 +70,33 @@ namespace scout{
 		typedef std::uint32_t uint;
 
 		// TEST DEFINITION ==========
-		class Test
-		{
+		class Test{
 		protected:
 			friend class TestRunner;
 
 			/// Type of expression
-			enum ExprType
-			{
+			enum ExprType{
 				ASSERT_TRUE,
-				ASSERT_FALSE
+				ASSERT_FALSE,
+				EVAL_TIME,
+				EVAL_TIME_CONSTR
 			};
 
 			/// Info for expression processing
-			struct ExprInfo
-			{
+			struct ExprInfo{
 				uint m_type;
 
 				std::string m_stringified_expr;
-				bool m_value;
+				bool m_flag;
+				double m_value;
 				uint m_line;
 
-				ExprInfo(ExprType type, const char* stringified_expr, bool value, int line);
+				ExprInfo(ExprType type, const char* stringified_expr, bool flag, int line);
+				ExprInfo(ExprType type, const char* stringified_expr, double value, int line);
 			};
 
 			/// Info for test gerarchy creation.
-			struct TestInfo
-			{
+			struct TestInfo{
 				std::string m_name;
 				std::string m_family;
 				Test* m_instance;
@@ -90,8 +107,11 @@ namespace scout{
 			int m_failed_expr, m_total_expr;
 			std::string m_name;
 
-			/// The constructor and destructor are defined protected for avoid instantiations.
 			Test() : m_failed_expr(0), m_total_expr(0){}
+			// Disable copy and assignament
+			Test(const Test&) = delete;
+			Test& operator=(const Test&) = delete;
+			
 			virtual ~Test(){}
 
 			/// The user must implement this function when provide a test.
@@ -100,15 +120,22 @@ namespace scout{
 			/// Function expression processing
 			void evaluate_expr(std::ostream& message_stream, ExprInfo* expression);
 
-		private:
-			SCOUT_DISALLOW_COPY_AND_ASSIGN(Test);
-
 		}; // class Test
 
 		// TEST IMPLEMENTATION ======================================================================
-		Test::ExprInfo::ExprInfo(ExprType type, const char* stringified_expr, bool value, int line) :
+		Test::ExprInfo::ExprInfo(ExprType type, const char* stringified_expr, bool flag, int line) :
 			m_type(type),
 			m_stringified_expr(stringified_expr),
+			m_flag(flag),
+			m_value(0.0),
+			m_line(line){
+			// Empty
+		}
+
+		Test::ExprInfo::ExprInfo(ExprType type, const char* stringified_expr, double value, int line) :
+			m_type(type),
+			m_stringified_expr(stringified_expr),
+			m_flag(false),
 			m_value(value),
 			m_line(line){
 			// Empty
@@ -121,6 +148,11 @@ namespace scout{
 			// Empty
 		}
 
+		/**
+		 * @brief Print the message for a processed expression.
+		 * @param message_stream The output stream.
+		 * @param expr The class containing the expression data.
+		 */
 		void Test::evaluate_expr(std::ostream& message_stream, Test::ExprInfo* expr){
 			if(expr == NULL) return;
 
@@ -129,7 +161,7 @@ namespace scout{
 			switch (expr->m_type) {
 
 			case ASSERT_TRUE:
-				if(!(expr->m_value)){
+				if(!(expr->m_flag)){
 					message_stream << "\t[ERROR] Failed AssertTrue(" << expr->m_stringified_expr.c_str()
 								   << ") in line: " << expr->m_line << ".\n";
 					++m_failed_expr;
@@ -137,11 +169,17 @@ namespace scout{
 				break;
 
 			case ASSERT_FALSE:
-				if(expr->m_value){
+				if(expr->m_flag){
 					message_stream << "\t[ERROR] Failed AssertFalse(" << expr->m_stringified_expr.c_str()
 								   << ") in line: " << expr->m_line << ".\n";
 					++m_failed_expr;
 				}
+				break;
+				
+			case EVAL_TIME:
+				message_stream 	<< "\t [TIME] expression: <" << expr->m_stringified_expr << ">  at line " << expr->m_line 
+								<< " was executed in " << expr->m_value << " seconds" 
+								<< " (" << (int)(expr->m_value * 1000) << " milliseconds)."<< std::endl;
 				break;
 			}
 
@@ -149,8 +187,7 @@ namespace scout{
 		}
 
 		// TEST RUNNER DEFINITION ==========
-		class TestRunner
-		{
+		class TestRunner{
 		private:
 			static TestRunner* m_singleton;
 
@@ -177,12 +214,13 @@ namespace scout{
 				m_testmap(), m_failed_tests(0), m_total_tests(0){
 				// Empty
 			}
+			// Disable copy and assignament
+			TestRunner(const TestRunner&) = delete;
+			TestRunner& operator=(const TestRunner&) = delete;
 
 			void reset();
 
 			bool is_disabled(std::string& name);
-
-			SCOUT_DISALLOW_COPY_AND_ASSIGN(TestRunner);
 
 		public:
 			static TestRunner& singleton();
@@ -248,14 +286,15 @@ namespace scout{
 					continue;
 				}
 
-				message_stream << "[----------] Executing FAMILY [" << map_iter->first.c_str() << "].\n";
+				message_stream << "[**********] Executing FAMILY [" << map_iter->first.c_str() << "].\n";
 				auto vect = map_iter->second.second;
 
 				for(auto it = vect.begin(); it != vect.end(); ++it){
 					Test* test = (*it);
 
 					std::string test_name = (test)->m_name;
-
+					
+					if (it != vect.begin() ) message_stream << "[----------]" << std::endl;
 					message_stream << "[  RUN     ] Executing TEST <" << test_name.c_str() << ">.\n";
 
 					test->run(message_stream);
@@ -274,7 +313,7 @@ namespace scout{
 					++m_total_tests;
 				}
 
-				message_stream << "[----------] Test family completed.\n";
+				message_stream << "[**********] Test family completed.\n";
 			}
 
 			message_stream << "\n[==========] REPORT: FAILED " << m_failed_tests << " TEST OUT OF " << m_total_tests << ".\n";
@@ -312,7 +351,10 @@ namespace scout{
 
 	// EXTERNAL FUNCTIONS =======================================================================
 
-	/// Run all the test defined in order and print the result on the message_stream std::ostream.
+	/**
+	 * @brief Run all the test defined (in order) and print the result on the message_stream.
+	 * @param message_stream The output stream.
+	 */
 	void evaluate_all_tests(std::ostream& message_stream){
 		message_stream << "[==========] Simple C with Object Unit Test - SCOUT " << std::endl;
 		internal::TestRunner::singleton().run_tests(message_stream);

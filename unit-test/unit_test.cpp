@@ -1,7 +1,17 @@
 #include <iostream>
 #include <fstream>
-
+#include <cmath>
 #include "../scout/scout.hpp"
+
+void slow_function(int n){
+	
+	for(int i = 1; i < n; ++i){
+		std::atan2(i, i);
+		std::cos(i);
+		std::sin(i);
+	}
+	
+}
 
 SCOUT_DEFINE_TEST(FirstFamily, FirstTest){
 	SCOUT_AssertTrue(1==1);
@@ -31,8 +41,13 @@ SCOUT_DEFINE_TEST(SecondFamily, ThirdTest){
 }
 
 // ... or an entire family.
-SCOUT_DEFINE_TEST(DISABLE_ThirdFamily, FourthTest){
+SCOUT_DEFINE_TEST(ThirdFamily, FourthTest){
 	SCOUT_AssertTrue(true);
+}
+
+SCOUT_DEFINE_TEST(ExecutionTimes, EvaluateTime){
+	int n = 100000;
+	SCOUT_GetTime( slow_function(n) );
 }
 
 
@@ -41,7 +56,6 @@ int main(){
 	std::ofstream out("scout.log");
 	if( out.is_open() ) scout::evaluate_all_tests(out);
 	out.close();
-
 	// Run again the tests and print the result on the standard output
 	scout::evaluate_all_tests(std::cout);
 
